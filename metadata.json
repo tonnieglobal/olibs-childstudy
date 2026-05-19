@@ -1,0 +1,8 @@
+{
+  "name": "Olibs ChildStudy",
+  "description": "A premier African tutoring platform connecting parents with verified tutors for personalized child learning experiences, featuring trial lessons, progress monitoring, and secure payments.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

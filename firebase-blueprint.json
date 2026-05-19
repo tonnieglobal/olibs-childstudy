@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Base profile for all platform users",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["parent", "tutor", "admin", "manager", "support"] },
+        "isVerified": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "TutorProfile": {
+      "title": "Tutor Profile",
+      "description": "Extended information for approved tutors",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "bio": { "type": "string" },
+        "specialization": { "type": "array", "items": { "type": "string" } },
+        "introVideoUrl": { "type": "string" },
+        "pricing": { "type": "number", "description": "Hourly rate in local currency" },
+        "availability": { "type": "object", "description": "Map of days/times available" },
+        "isApproved": { "type": "boolean" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "credentials": { "type": "array", "items": { "type": "string" } },
+        "guarantors": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "Lesson": {
+      "title": "Lesson",
+      "description": "A scheduled or completed tutoring session",
+      "type": "object",
+      "properties": {
+        "parentUid": { "type": "string" },
+        "tutorUid": { "type": "string" },
+        "childName": { "type": "string" },
+        "subject": { "type": "string" },
+        "startAt": { "type": "string", "format": "date-time" },
+        "durationMinutes": { "type": "number" },
+        "status": { "type": "string", "enum": ["scheduled", "completed", "cancelled", "trial"] },
+        "recordingUrl": { "type": "string" },
+        "report": { "type": "string" },
+        "amountPaid": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Contract": {
+      "title": "Contract",
+      "description": "Learning agreement between parent and tutor",
+      "type": "object",
+      "properties": {
+        "parentUid": { "type": "string" },
+        "tutorUid": { "type": "string" },
+        "terms": { "type": "string" },
+        "signedAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["pending", "active", "expired"] }
+      }
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Feedback for a completed lesson",
+      "type": "object",
+      "properties": {
+        "lessonId": { "type": "string" },
+        "reviewerUid": { "type": "string" },
+        "targetUid": { "type": "string" },
+        "rating": { "type": "number", "minimum": 1, "maximum": 5 },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app system notification for a user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["booking", "payment", "report", "system"] },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/tutors/{tutorId}": {
+      "schema": "TutorProfile",
+      "description": "Detailed tutor data"
+    },
+    "/lessons/{lessonId}": {
+      "schema": "Lesson",
+      "description": "Tutoring sessions"
+    },
+    "/contracts/{contractId}": {
+      "schema": "Contract",
+      "description": "Digital contracts"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Tutor ratings"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications"
+    }
+  }
+}
