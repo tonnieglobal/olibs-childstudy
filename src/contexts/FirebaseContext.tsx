@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged, User as FirebaseUser, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
+import { onAuthStateChanged, User as FirebaseUser, signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 
@@ -17,6 +17,8 @@ interface FirebaseContextType {
   profile: UserProfile | null;
   loading: boolean;
   signIn: (roleHint?: string) => Promise<void>;
+  signInWithEmail: (email: string, password: string, roleHint?: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, displayName: string, roleHint?: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -70,12 +72,40 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signInWithEmail = async (email: string, password: string, roleHint?: string) => {
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    const firebaseUser = result.user;
+
+    // Fetch profile
+    const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+    if (userDoc.exists()) {
+      setProfile(userDoc.data() as UserProfile);
+    }
+  };
+
+  const signUpWithEmail = async (email: string, password: string, displayName: string, roleHint?: string) => {
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    const firebaseUser = result.user;
+
+    // Create profile
+    const newProfile: UserProfile = {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email,
+      displayName: displayName,
+      photoURL: firebaseUser.photoURL,
+      role: roleHint as any,
+      isVerified: false
+    };
+    await setDoc(doc(db, "users", firebaseUser.uid), newProfile);
+    setProfile(newProfile);
+  };
+
   const logout = async () => {
     await signOut(auth);
   };
 
   return (
-    <FirebaseContext.Provider value={{ user, profile, loading, signIn, logout }}>
+    <FirebaseContext.Provider value={{ user, profile, loading, signIn, signInWithEmail, signUpWithEmail, logout }}>
       {children}
     </FirebaseContext.Provider>
   );

@@ -201,7 +201,7 @@ export function LandingPage() {
 
       {/* Support Floating Button */}
       <a
-        href="https://wa.me/234800000000"
+        href="https://wa.me/2347080391573"
         target="_blank"
         rel="noopener noreferrer"
         className="fixed bottom-8 right-8 w-16 h-16 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform z-50"

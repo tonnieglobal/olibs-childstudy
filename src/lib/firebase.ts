@@ -8,6 +8,7 @@ import { getStorage } from "firebase/storage";
 const firebaseConfig = {
   apiKey: "AIzaSyAaFEol7JsxS3NMkxgtaKHSv3DcDxMA3as",
   authDomain: "olibs-child-study.firebaseapp.com",
+  databaseURL: "https://olibs-child-study-default-rtdb.firebaseio.com",
   projectId: "olibs-child-study",
   storageBucket: "olibs-child-study.firebasestorage.app",
   messagingSenderId: "641580595925",

@@ -10,20 +10,25 @@ export function AuthPage({ isSignup = false }) {
   const role = (searchParams.get("role") as "parent" | "tutor") || "parent";
   const [formData, setFormData] = useState({ name: "", email: "", password: "" });
   const navigate = useNavigate();
-  const { signIn } = useFirebase();
+  const { signIn, signInWithEmail, signUpWithEmail } = useFirebase();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
+    setError(null);
     try {
-      // For this experience, we use Google Login to simplify things
-      await signIn(role);
+      if (isSignup) {
+        await signUpWithEmail(formData.email, formData.password, formData.name, role);
+      } else {
+        await signInWithEmail(formData.email, formData.password, role);
+      }
       if (role === "tutor") navigate("/tutor/onboarding");
       else navigate(`/${role}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Auth failed. Please use Google Login.");
+      setError(error.message || "Authentication failed. Please try again.");
     } finally {
       setIsLoggingIn(false);
     }
@@ -31,12 +36,14 @@ export function AuthPage({ isSignup = false }) {
 
   const handleGoogleLogin = async () => {
     setIsLoggingIn(true);
+    setError(null);
     try {
         await signIn(role);
         if (role === "tutor") navigate("/tutor/onboarding");
         else navigate(`/${role}`);
-    } catch (e) {
+    } catch (e: any) {
         console.error(e);
+        setError(e.message || "Google authentication failed. Please try again.");
     } finally {
         setIsLoggingIn(false);
     }
@@ -60,6 +67,11 @@ export function AuthPage({ isSignup = false }) {
                 ? "Join thousands of families building a brighter future." 
                 : "Enter your credentials to access your dashboard."}
             </p>
+            {error && (
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
+                {error}
+              </div>
+            )}
           </header>
 
           <form onSubmit={handleSubmit} className="space-y-6">
