@@ -80,10 +80,24 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     const result = await signInWithEmailAndPassword(auth, email, password);
     const firebaseUser = result.user;
 
-    // Fetch profile
+    // Fetch or create profile
     const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
     if (userDoc.exists()) {
       setProfile(userDoc.data() as UserProfile);
+    } else if (roleHint) {
+      // Create profile if it doesn't exist and roleHint is provided
+      const newProfile: UserProfile = {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName: firebaseUser.displayName,
+        photoURL: firebaseUser.photoURL,
+        role: roleHint as any,
+        isVerified: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, "users", firebaseUser.uid), newProfile);
+      setProfile(newProfile);
     }
   };
 
