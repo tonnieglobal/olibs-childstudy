@@ -54,70 +54,142 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (roleHint?: string) => {
-    const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-    const firebaseUser = result.user;
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const firebaseUser = result.user;
 
-    // Check for profile again
-    const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
-    if (!userDoc.exists() && roleHint) {
-      const newProfile: UserProfile = {
-        uid: firebaseUser.uid,
-        email: firebaseUser.email,
-        displayName: firebaseUser.displayName,
-        photoURL: firebaseUser.photoURL,
-        role: roleHint as any,
-        isVerified: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      await setDoc(doc(db, "users", firebaseUser.uid), newProfile);
-      setProfile(newProfile);
+      // Check for profile again with error handling
+      try {
+        const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+        if (!userDoc.exists() && roleHint) {
+          const newProfile: UserProfile = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+            role: roleHint as any,
+            isVerified: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          await setDoc(doc(db, "users", firebaseUser.uid), newProfile);
+          setProfile(newProfile);
+        } else if (userDoc.exists()) {
+          setProfile(userDoc.data() as UserProfile);
+        }
+      } catch (firestoreError: any) {
+        console.error("Firestore error during Google sign in:", firestoreError);
+        // If Firestore is offline, still allow login with basic profile
+        if (roleHint) {
+          const basicProfile: UserProfile = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+            role: roleHint as any,
+            isVerified: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          setProfile(basicProfile);
+        }
+        throw new Error("Network error. Please check your connection and try again.");
+      }
+    } catch (error: any) {
+      console.error("Google sign in error:", error);
+      throw error;
     }
   };
 
   const signInWithEmail = async (email: string, password: string, roleHint?: string) => {
-    const result = await signInWithEmailAndPassword(auth, email, password);
-    const firebaseUser = result.user;
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      const firebaseUser = result.user;
 
-    // Fetch or create profile
-    const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
-    if (userDoc.exists()) {
-      setProfile(userDoc.data() as UserProfile);
-    } else if (roleHint) {
-      // Create profile if it doesn't exist and roleHint is provided
-      const newProfile: UserProfile = {
-        uid: firebaseUser.uid,
-        email: firebaseUser.email,
-        displayName: firebaseUser.displayName,
-        photoURL: firebaseUser.photoURL,
-        role: roleHint as any,
-        isVerified: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      await setDoc(doc(db, "users", firebaseUser.uid), newProfile);
-      setProfile(newProfile);
+      // Fetch or create profile with retry logic
+      try {
+        const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+        if (userDoc.exists()) {
+          setProfile(userDoc.data() as UserProfile);
+        } else if (roleHint) {
+          // Create profile if it doesn't exist and roleHint is provided
+          const newProfile: UserProfile = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+            role: roleHint as any,
+            isVerified: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          await setDoc(doc(db, "users", firebaseUser.uid), newProfile);
+          setProfile(newProfile);
+        }
+      } catch (firestoreError: any) {
+        console.error("Firestore error during sign in:", firestoreError);
+        // If Firestore is offline, still allow login with basic profile
+        if (roleHint) {
+          const basicProfile: UserProfile = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+            role: roleHint as any,
+            isVerified: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          setProfile(basicProfile);
+        }
+        throw new Error("Network error. Please check your connection and try again.");
+      }
+    } catch (error: any) {
+      console.error("Sign in error:", error);
+      throw error;
     }
   };
 
   const signUpWithEmail = async (email: string, password: string, displayName: string, roleHint?: string) => {
-    const result = await createUserWithEmailAndPassword(auth, email, password);
-    const firebaseUser = result.user;
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      const firebaseUser = result.user;
 
-    // Create profile
-    const newProfile: UserProfile = {
-      uid: firebaseUser.uid,
-      email: firebaseUser.email,
-      displayName: displayName,
-      photoURL: firebaseUser.photoURL,
-      role: roleHint as any,
-      isVerified: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    await setDoc(doc(db, "users", firebaseUser.uid), newProfile);
-    setProfile(newProfile);
+      // Create profile with error handling
+      try {
+        const newProfile: UserProfile = {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: displayName,
+          photoURL: firebaseUser.photoURL,
+          role: roleHint as any,
+          isVerified: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        await setDoc(doc(db, "users", firebaseUser.uid), newProfile);
+        setProfile(newProfile);
+      } catch (firestoreError: any) {
+        console.error("Firestore error during sign up:", firestoreError);
+        // If Firestore is offline, still allow signup with basic profile
+        const basicProfile: UserProfile = {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: displayName,
+          photoURL: firebaseUser.photoURL,
+          role: roleHint as any,
+          isVerified: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        setProfile(basicProfile);
+        throw new Error("Network error. Please check your connection and try again.");
+      }
+    } catch (error: any) {
+      console.error("Sign up error:", error);
+      throw error;
+    }
   };
 
   const logout = async () => {
