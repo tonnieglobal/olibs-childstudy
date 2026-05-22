@@ -10,6 +10,8 @@ interface UserProfile {
   photoURL: string | null;
   role: "parent" | "tutor" | "admin";
   isVerified: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface FirebaseContextType {
@@ -65,7 +67,9 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
         displayName: firebaseUser.displayName,
         photoURL: firebaseUser.photoURL,
         role: roleHint as any,
-        isVerified: false
+        isVerified: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
       await setDoc(doc(db, "users", firebaseUser.uid), newProfile);
       setProfile(newProfile);
@@ -94,7 +98,9 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       displayName: displayName,
       photoURL: firebaseUser.photoURL,
       role: roleHint as any,
-      isVerified: false
+      isVerified: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
     await setDoc(doc(db, "users", firebaseUser.uid), newProfile);
     setProfile(newProfile);

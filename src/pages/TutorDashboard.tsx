@@ -8,11 +8,53 @@ import {
 import { Link, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { useFirebase } from "../contexts/FirebaseContext";
 import { Logo } from "../components/ui/Logo";
+import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { useEffect, useState } from "react";
 
 export function TutorDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile, logout } = useFirebase();
+  const { profile, logout, user } = useFirebase();
+  const [lessons, setLessons] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      if (!user) return;
+      
+      try {
+        // Fetch lessons for this tutor
+        const lessonsQuery = query(
+          collection(db, "lessons"),
+          where("tutorUid", "==", user.uid),
+          orderBy("startAt", "desc"),
+          limit(10)
+        );
+        const lessonsSnapshot = await getDocs(lessonsQuery);
+        const lessonsData = lessonsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setLessons(lessonsData);
+
+        // Fetch reviews for this tutor
+        const reviewsQuery = query(
+          collection(db, "reviews"),
+          where("targetUid", "==", user.uid),
+          orderBy("createdAt", "desc"),
+          limit(10)
+        );
+        const reviewsSnapshot = await getDocs(reviewsQuery);
+        const reviewsData = reviewsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setReviews(reviewsData);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+  }, [user]);
 
   const handleLogout = async () => {
     await logout();
@@ -20,15 +62,10 @@ export function TutorDashboard() {
   };
 
   const stats = [
-    { label: "Total Earnings", value: "₦245,000", icon: Wallet, color: "text-blue-600 bg-blue-50", change: "+18%" },
-    { label: "Active Students", value: "14", icon: Users, color: "text-purple-600 bg-purple-50", change: "+2" },
-    { label: "Upcoming Classes", value: "6", icon: Calendar, color: "text-yellow-600 bg-yellow-50", change: "This week" },
-    { label: "Rating", value: "4.9/5", icon: CheckCircle2, color: "text-green-600 bg-green-50", change: "20+ reviews" },
-  ];
-
-  const recentReviews = [
-    { name: "Mrs. Adebayo", content: "Great math session! Tolu enjoyed it.", rating: 5, date: "2h ago" },
-    { name: "John Doe", content: "Very professional and punctual.", rating: 5, date: "1d ago" },
+    { label: "Total Earnings", value: loading ? "..." : `₦${lessons.reduce((sum, l) => sum + (l.price || 0), 0).toLocaleString()}`, icon: Wallet, color: "text-blue-600 bg-blue-50", change: "+18%" },
+    { label: "Active Students", value: loading ? "..." : lessons.length.toString(), icon: Users, color: "text-purple-600 bg-purple-50", change: "+2" },
+    { label: "Upcoming Classes", value: loading ? "..." : lessons.filter(l => l.status === 'scheduled').length.toString(), icon: Calendar, color: "text-yellow-600 bg-yellow-50", change: "This week" },
+    { label: "Rating", value: loading ? "..." : `${reviews.length > 0 ? (reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length).toFixed(1) : 'N/A'}/5`, icon: CheckCircle2, color: "text-green-600 bg-green-50", change: `${reviews.length} reviews` },
   ];
 
   return (
@@ -83,8 +120,8 @@ export function TutorDashboard() {
         <div className="max-w-7xl mx-auto">
           <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
             <div>
-              <h1 className="text-3xl font-bold text-ink">Welcome, Mr. Daniel! ✨</h1>
-              <p className="text-gray-500">You have 2 lessons starting in the next 4 hours.</p>
+              <h1 className="text-3xl font-bold text-ink">Welcome, {profile?.displayName || 'Tutor'}! ✨</h1>
+              <p className="text-gray-500">You have {lessons.filter(l => l.status === 'scheduled').length} upcoming lessons.</p>
             </div>
             <div className="flex items-center gap-4">
                <div className="hidden sm:flex bg-white px-4 py-2 rounded-xl border border-gray-100 items-center gap-2">
@@ -96,7 +133,13 @@ export function TutorDashboard() {
                 <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
               </button>
               <div className="w-12 h-12 bg-gray-200 rounded-2xl overflow-hidden cursor-pointer hover:ring-4 hover:ring-primary/10 transition-all">
-                <img src="https://i.pravatar.cc/100?u=tutor-daniel" alt="Profile" />
+                {profile?.photoURL ? (
+                  <img src={profile.photoURL} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-primary/20 flex items-center justify-center text-primary font-bold">
+                    {profile?.displayName?.[0] || 'T'}
+                  </div>
+                )}
               </div>
             </div>
           </header>
@@ -137,27 +180,36 @@ export function TutorDashboard() {
                         <Link to="/tutor/schedule" className="text-primary font-bold hover:underline">View All</Link>
                       </div>
                       <div className="space-y-4">
-                        {[
-                          { student: "Tolu Adebayo", subject: "Mathematics", time: "Starts in 45 min", type: "Math Specialist" },
-                          { student: "Emeka Obi", subject: "Intro Science", time: "Tomorrow, 2:00 PM", type: "Trial Session" },
-                        ].map((lesson, i) => (
-                          <div key={i} className="flex items-center justify-between p-6 rounded-3xl bg-gray-50 border border-gray-100 group hover:border-primary/30 transition-all">
-                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-primary border border-gray-200">
-                                <Video size={24} />
+                        {loading ? (
+                          <div className="text-center py-8 text-gray-500">Loading lessons...</div>
+                        ) : lessons.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500">No upcoming lessons</div>
+                        ) : (
+                          lessons.slice(0, 5).map((lesson, i) => (
+                            <div key={i} className="flex items-center justify-between p-6 rounded-3xl bg-gray-50 border border-gray-100 group hover:border-primary/30 transition-all">
+                              <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-primary border border-gray-200">
+                                  <Video size={24} />
+                                </div>
+                                <div>
+                                  <h4 className="font-bold text-lg">{lesson.studentName || 'Student'}</h4>
+                                  <p className="text-gray-500 text-sm">
+                                    {lesson.subject} • <span className="text-primary font-medium">
+                                      {lesson.startAt ? new Date(lesson.startAt).toLocaleString() : 'Scheduled'}
+                                    </span>
+                                  </p>
+                                </div>
                               </div>
-                              <div>
-                                <h4 className="font-bold text-lg">{lesson.student}</h4>
-                                <p className="text-gray-500 text-sm">{lesson.subject} • <span className="text-primary font-medium">{lesson.time}</span></p>
-                              </div>
+                              {lesson.status === 'scheduled' && (
+                                <div className="flex gap-2">
+                                  <button className="px-5 py-2.5 bg-primary text-white font-bold rounded-xl flex items-center gap-2 hover:scale-105 transition-all">
+                                    Go to Class <ArrowUpRight size={18} />
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                            <div className="flex gap-2">
-                                <button className="px-5 py-2.5 bg-primary text-white font-bold rounded-xl flex items-center gap-2 hover:scale-105 transition-all">
-                                  Go to Class <ArrowUpRight size={18} />
-                                </button>
-                            </div>
-                          </div>
-                        ))}
+                          ))
+                        )}
                       </div>
                     </div>
 
@@ -201,18 +253,28 @@ export function TutorDashboard() {
                            Recent Reviews
                         </h3>
                         <div className="space-y-6">
-                           {recentReviews.map((review, i) => (
-                             <div key={i} className="pb-6 border-b border-gray-50 last:border-0 last:pb-0">
-                                <div className="flex justify-between mb-2">
-                                   <p className="font-bold">{review.name}</p>
-                                   <span className="text-[10px] text-gray-400 font-bold uppercase">{review.date}</span>
-                                </div>
-                                <div className="flex gap-0.5 mb-2">
-                                   {[1,2,3,4,5].map(s => <Star key={s} size={12} className="fill-secondary text-secondary" />)}
-                                </div>
-                                <p className="text-gray-500 text-sm italic">"{review.content}"</p>
-                             </div>
-                           ))}
+                           {loading ? (
+                             <div className="text-center py-8 text-gray-500">Loading reviews...</div>
+                           ) : reviews.length === 0 ? (
+                             <div className="text-center py-8 text-gray-500">No reviews yet</div>
+                           ) : (
+                             reviews.slice(0, 5).map((review, i) => (
+                               <div key={i} className="pb-6 border-b border-gray-50 last:border-0 last:pb-0">
+                                  <div className="flex justify-between mb-2">
+                                     <p className="font-bold">{review.authorName || 'Parent'}</p>
+                                     <span className="text-[10px] text-gray-400 font-bold uppercase">
+                                       {review.createdAt ? new Date(review.createdAt).toLocaleDateString() : 'Recently'}
+                                     </span>
+                                  </div>
+                                  <div className="flex gap-0.5 mb-2">
+                                     {[1,2,3,4,5].map(s => (
+                                       <Star key={s} size={12} className={s <= (review.rating || 0) ? "fill-secondary text-secondary" : "text-gray-300"} />
+                                     ))}
+                                  </div>
+                                  <p className="text-gray-500 text-sm italic">"{review.content}"</p>
+                               </div>
+                             ))
+                           )}
                         </div>
                         <button className="w-full mt-6 py-3 border-2 border-gray-100 text-gray-500 font-bold rounded-xl hover:bg-gray-50 transition-all uppercase text-xs tracking-widest">
                            View All Feedback

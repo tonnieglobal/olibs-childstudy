@@ -8,11 +8,52 @@ import {
 import { Link, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { useFirebase } from "../contexts/FirebaseContext";
 import { Logo } from "../components/ui/Logo";
+import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { useEffect, useState } from "react";
 
 export function ParentDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile, logout } = useFirebase();
+  const { profile, logout, user } = useFirebase();
+  const [lessons, setLessons] = useState<any[]>([]);
+  const [tutors, setTutors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      if (!user) return;
+      
+      try {
+        // Fetch lessons for this parent
+        const lessonsQuery = query(
+          collection(db, "lessons"),
+          where("parentUid", "==", user.uid),
+          orderBy("startAt", "desc"),
+          limit(10)
+        );
+        const lessonsSnapshot = await getDocs(lessonsQuery);
+        const lessonsData = lessonsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setLessons(lessonsData);
+
+        // Fetch approved tutors
+        const tutorsQuery = query(
+          collection(db, "tutors"),
+          where("isApproved", "==", true),
+          limit(10)
+        );
+        const tutorsSnapshot = await getDocs(tutorsQuery);
+        const tutorsData = tutorsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setTutors(tutorsData);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+  }, [user]);
 
   const handleLogout = async () => {
     await logout();
@@ -20,10 +61,10 @@ export function ParentDashboard() {
   };
 
   const stats = [
-    { label: "Active Tutors", value: "3", icon: Users, color: "text-blue-600 bg-blue-50" },
-    { label: "Booked Lessons", value: "12", icon: Calendar, color: "text-purple-600 bg-purple-50" },
-    { label: "Learning Hours", value: "48h", icon: Clock, color: "text-yellow-600 bg-yellow-50" },
-    { label: "Overall Progress", value: "87%", icon: BarChart3, color: "text-green-600 bg-green-50" },
+    { label: "Active Tutors", value: tutors.length.toString(), icon: Users, color: "text-blue-600 bg-blue-50" },
+    { label: "Booked Lessons", value: lessons.length.toString(), icon: Calendar, color: "text-purple-600 bg-purple-50" },
+    { label: "Learning Hours", value: loading ? "..." : `${lessons.length * 1}h`, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
+    { label: "Overall Progress", value: loading ? "..." : "85%", icon: BarChart3, color: "text-green-600 bg-green-50" },
   ];
 
   return (
@@ -78,8 +119,8 @@ export function ParentDashboard() {
         <div className="max-w-7xl mx-auto">
           <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
             <div>
-              <h1 className="text-3xl font-bold text-ink">Welcome, Mrs. Adebayo! 👋</h1>
-              <p className="text-gray-500">Here's how Tolu is progressing this week.</p>
+              <h1 className="text-3xl font-bold text-ink">Welcome, {profile?.displayName || 'User'}! 👋</h1>
+              <p className="text-gray-500">Here's your learning progress.</p>
             </div>
             <div className="flex items-center gap-4">
               <button className="p-3 bg-white border border-gray-100 rounded-2xl relative text-gray-500 hover:text-primary transition-colors">
@@ -87,7 +128,13 @@ export function ParentDashboard() {
                 <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
               </button>
               <div className="w-12 h-12 bg-gray-200 rounded-2xl overflow-hidden cursor-pointer hover:ring-4 hover:ring-primary/10 transition-all">
-                <img src="https://i.pravatar.cc/100?u=adebayo" alt="Profile" />
+                {profile?.photoURL ? (
+                  <img src={profile.photoURL} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-primary/20 flex items-center justify-center text-primary font-bold">
+                    {profile?.displayName?.[0] || 'U'}
+                  </div>
+                )}
               </div>
             </div>
           </header>
@@ -122,25 +169,32 @@ export function ParentDashboard() {
                       <button className="text-primary font-bold hover:underline">View Calendar</button>
                     </div>
                     <div className="space-y-4">
-                      {[
-                        { title: "Algebra Basics", tutor: "Mr. Daniel", time: "Today, 4:00 PM", status: "Starting soon" },
-                        { title: "English Grammar", tutor: "Mrs. Sarah", time: "Tomorrow, 10:00 AM", status: "Scheduled" },
-                      ].map((lesson, i) => (
-                        <div key={i} className="flex items-center justify-between p-6 rounded-3xl bg-gray-50 border border-gray-100 group hover:border-primary/30 transition-all">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
-                              <BookOpen size={24} />
+                      {loading ? (
+                        <div className="text-center py-8 text-gray-500">Loading lessons...</div>
+                      ) : lessons.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500">No lessons booked yet</div>
+                      ) : (
+                        lessons.slice(0, 5).map((lesson, i) => (
+                          <div key={i} className="flex items-center justify-between p-6 rounded-3xl bg-gray-50 border border-gray-100 group hover:border-primary/30 transition-all">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
+                                <BookOpen size={24} />
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-lg">{lesson.subject}</h4>
+                                <p className="text-gray-500 text-sm">
+                                  {lesson.startAt ? new Date(lesson.startAt).toLocaleString() : 'Scheduled'} • {lesson.status}
+                                </p>
+                              </div>
                             </div>
-                            <div>
-                              <h4 className="font-bold text-lg">{lesson.title}</h4>
-                              <p className="text-gray-500 text-sm">with {lesson.tutor} • {lesson.time}</p>
-                            </div>
+                            {lesson.status === 'scheduled' && (
+                              <button className="px-6 py-3 bg-white text-primary font-bold rounded-xl border border-primary hover:bg-primary hover:text-white transition-all flex items-center gap-2">
+                                Join Room <PlayCircle size={18} />
+                              </button>
+                            )}
                           </div>
-                          <button className="px-6 py-3 bg-white text-primary font-bold rounded-xl border border-primary hover:bg-primary hover:text-white transition-all flex items-center gap-2">
-                            Join Room <PlayCircle size={18} />
-                          </button>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   </div>
 
@@ -197,35 +251,48 @@ export function ParentDashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                  {[
-                    { name: "Mr. Daniel", subject: "Mathematics", rating: 4.9, price: "₦5,000/hr", image: "https://i.pravatar.cc/150?u=daniel" },
-                    { name: "Mrs. Sarah", subject: "English Literature", rating: 4.8, price: "₦4,500/hr", image: "https://i.pravatar.cc/150?u=sarah" },
-                    { name: "Blessing Okoro", subject: "Physics", rating: 5.0, price: "₦6,000/hr", image: "https://i.pravatar.cc/150?u=blessing" },
-                    { name: "Dr. Ahmed", subject: "Chemistry", rating: 4.7, price: "₦7,500/hr", image: "https://i.pravatar.cc/150?u=ahmed" },
-                  ].map((tutor, i) => (
-                    <motion.div
-                      key={i}
-                      whileHover={{ y: -8 }}
-                      className="bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all"
-                    >
-                      <div className="relative h-48">
-                        <img src={tutor.image} alt={tutor.name} className="w-full h-full object-cover" />
-                        <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg flex items-center gap-1 font-bold text-sm">
-                          <Star size={14} className="fill-yellow-400 text-yellow-400" /> {tutor.rating}
+                  {loading ? (
+                    <div className="col-span-full text-center py-8 text-gray-500">Loading tutors...</div>
+                  ) : tutors.length === 0 ? (
+                    <div className="col-span-full text-center py-8 text-gray-500">No tutors available yet</div>
+                  ) : (
+                    tutors.map((tutor, i) => (
+                      <motion.div
+                        key={i}
+                        whileHover={{ y: -8 }}
+                        className="bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all"
+                      >
+                        <div className="relative h-48">
+                          {tutor.introVideoUrl ? (
+                            <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                              <span className="text-gray-400">Intro Video</span>
+                            </div>
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
+                              <div className="w-20 h-20 bg-primary/30 rounded-full flex items-center justify-center text-primary font-bold text-2xl">
+                                {tutor.displayName?.[0] || 'T'}
+                              </div>
+                            </div>
+                          )}
+                          <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg flex items-center gap-1 font-bold text-sm">
+                            <Star size={14} className="fill-yellow-400 text-yellow-400" /> {tutor.rating || 'N/A'}
+                          </div>
                         </div>
-                      </div>
-                      <div className="p-6">
-                        <h4 className="text-xl font-bold mb-1">{tutor.name}</h4>
-                        <p className="text-primary font-semibold text-sm mb-4">{tutor.subject}</p>
-                        <div className="flex items-center justify-between pt-4 border-t border-gray-50">
-                          <span className="text-lg font-black text-ink">{tutor.price}</span>
-                          <button className="px-4 py-2 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 transition-colors">
-                            Book Trial
-                          </button>
+                        <div className="p-6">
+                          <h4 className="text-xl font-bold mb-1">{tutor.displayName || 'Tutor'}</h4>
+                          <p className="text-primary font-semibold text-sm mb-4">
+                            {tutor.specialization?.join(', ') || tutor.subject || 'Various Subjects'}
+                          </p>
+                          <div className="flex items-center justify-between pt-4 border-t border-gray-50">
+                            <span className="text-lg font-black text-ink">₦{tutor.pricing || '5,000'}/hr</span>
+                            <button className="px-4 py-2 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 transition-colors">
+                              Book Trial
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    </motion.div>
-                  ))}
+                      </motion.div>
+                    ))
+                  )}
                 </div>
               </div>
             } />

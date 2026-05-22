@@ -6,11 +6,13 @@ import {
   Mail, MessageSquare, ChevronRight,
   Filter, X
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { useFirebase } from "../contexts/FirebaseContext";
 import { Logo } from "../components/ui/Logo";
+import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
+import { db } from "../lib/firebase";
 
 const SUBJECTS = ["All", "Mathematics", "English", "Further Math", "Physics", "Chemistry", "Biology", "Literature", "Government"];
 const STATUSES = ["All", "Pending Review", "Verified", "Declined"];
@@ -18,11 +20,40 @@ const STATUSES = ["All", "Pending Review", "Verified", "Declined"];
 export function AdminDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile, logout } = useFirebase();
+  const { profile, logout, user } = useFirebase();
 
   const [subjectFilter, setSubjectFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [tutors, setTutors] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      if (!user) return;
+      
+      try {
+        // Fetch all tutors
+        const tutorsQuery = query(collection(db, "tutors"));
+        const tutorsSnapshot = await getDocs(tutorsQuery);
+        const tutorsData = tutorsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setTutors(tutorsData);
+
+        // Fetch all users
+        const usersQuery = query(collection(db, "users"));
+        const usersSnapshot = await getDocs(usersQuery);
+        const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setUsers(usersData);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+  }, [user]);
 
   const handleLogout = async () => {
     await logout();
@@ -30,30 +61,24 @@ export function AdminDashboard() {
   };
 
   const stats = [
-    { label: "Total Users", value: "12,560", icon: Users, color: "text-blue-600 bg-blue-50" },
-    { label: "Pending Tutors", value: "48", icon: Shield, color: "text-purple-600 bg-purple-50" },
-    { label: "Active Revenue", value: "₦45.6M", icon: CreditCard, color: "text-green-600 bg-green-50" },
-    { label: "Active Disputes", value: "5", icon: AlertTriangle, color: "text-red-600 bg-red-50" },
-  ];
-
-  const pendingApprovals = [
-    { name: "Blessing Okoro", subject: "English", city: "Lagos", status: "Pending Review" },
-    { name: "John Smith", subject: "Physics", city: "Accra", status: "Verified" },
-    { name: "Adaeze Uzor", subject: "Further Math", city: "Abuja", status: "Declined" },
-    { name: "Tunde Ednut", subject: "Mathematics", city: "Lagos", status: "Pending Review" },
-    { name: "Chioma Adeleke", subject: "Biology", city: "Enugu", status: "Verified" },
-    { name: "Seyi Shay", subject: "Chemistry", city: "Kaduna", status: "Pending Review" },
+    { label: "Total Users", value: loading ? "..." : users.length.toString(), icon: Users, color: "text-blue-600 bg-blue-50" },
+    { label: "Pending Tutors", value: loading ? "..." : tutors.filter(t => !t.isApproved).length.toString(), icon: Shield, color: "text-purple-600 bg-purple-50" },
+    { label: "Active Revenue", value: loading ? "..." : "₦45.6M", icon: CreditCard, color: "text-green-600 bg-green-50" },
+    { label: "Active Disputes", value: loading ? "..." : "5", icon: AlertTriangle, color: "text-red-600 bg-red-50" },
   ];
 
   const filteredTutors = useMemo(() => {
-    return pendingApprovals.filter(tutor => {
+    return tutors.filter(tutor => {
       const matchesSubject = subjectFilter === "All" || tutor.subject === subjectFilter;
-      const matchesStatus = statusFilter === "All" || tutor.status === statusFilter;
-      const matchesSearch = tutor.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                           tutor.city.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = statusFilter === "All" || 
+                            (statusFilter === "Pending Review" && !tutor.isApproved) ||
+                            (statusFilter === "Verified" && tutor.isApproved) ||
+                            (statusFilter === "Declined" && tutor.isDeclined);
+      const matchesSearch = tutor.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                           tutor.city?.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesSubject && matchesStatus && matchesSearch;
     });
-  }, [subjectFilter, statusFilter, searchQuery]);
+  }, [subjectFilter, statusFilter, searchQuery, tutors]);
 
   const TutorApprovalsPage = () => (
     <div className="space-y-8">
@@ -120,49 +145,59 @@ export function AdminDashboard() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               <AnimatePresence mode="popLayout">
-                {filteredTutors.map((tutor) => (
-                  <motion.tr 
-                    layout
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    key={tutor.name} 
-                    className="hover:bg-gray-50/50 transition-colors group"
-                  >
-                    <td className="px-8 py-6 text-ink">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center font-bold">
-                          {tutor.name[0]}
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="px-8 py-20 text-center text-gray-500">Loading tutors...</td>
+                  </tr>
+                ) : filteredTutors.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-8 py-20 text-center text-gray-500">No matching tutors</td>
+                  </tr>
+                ) : (
+                  filteredTutors.map((tutor) => (
+                    <motion.tr 
+                      layout
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      key={tutor.id} 
+                      className="hover:bg-gray-50/50 transition-colors group"
+                    >
+                      <td className="px-8 py-6 text-ink">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center font-bold">
+                            {tutor.displayName?.[0] || 'T'}
+                          </div>
+                          <span className="font-bold">{tutor.displayName || 'Tutor'}</span>
                         </div>
-                        <span className="font-bold">{tutor.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-8 py-6">
-                      <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold uppercase tracking-wider italic">
-                        {tutor.subject}
-                      </span>
-                    </td>
-                    <td className="px-8 py-6 text-sm text-gray-500 font-medium">{tutor.city}</td>
-                    <td className="px-8 py-6">
-                      <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${
-                        tutor.status === "Verified" ? "bg-green-50 text-green-600 border-green-100" :
-                        tutor.status === "Declined" ? "bg-red-50 text-red-600 border-red-100" : 
-                        "bg-amber-50 text-amber-600 border-amber-100"
-                      }`}>
-                         <div className={`w-1.5 h-1.5 rounded-full ${
-                           tutor.status === "Verified" ? "bg-green-500" :
-                           tutor.status === "Declined" ? "bg-red-500" : "bg-amber-500"
-                         }`}></div>
-                         {tutor.status}
-                      </div>
-                    </td>
-                    <td className="px-8 py-6 text-right">
-                      <button className="px-5 py-2.5 bg-ink text-white rounded-xl font-bold text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-ink/10">
-                        Examine Profile
-                      </button>
-                    </td>
-                  </motion.tr>
-                ))}
+                      </td>
+                      <td className="px-8 py-6">
+                        <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold uppercase tracking-wider italic">
+                          {tutor.subject || 'Various'}
+                        </span>
+                      </td>
+                      <td className="px-8 py-6 text-sm text-gray-500 font-medium">{tutor.city || 'Location'}</td>
+                      <td className="px-8 py-6">
+                        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${
+                          tutor.isApproved ? "bg-green-50 text-green-600 border-green-100" :
+                          tutor.isDeclined ? "bg-red-50 text-red-600 border-red-100" : 
+                          "bg-amber-50 text-amber-600 border-amber-100"
+                        }`}>
+                           <div className={`w-1.5 h-1.5 rounded-full ${
+                             tutor.isApproved ? "bg-green-500" :
+                             tutor.isDeclined ? "bg-red-500" : "bg-amber-500"
+                           }`}></div>
+                           {tutor.isApproved ? "Verified" : tutor.isDeclined ? "Declined" : "Pending Review"}
+                        </div>
+                      </td>
+                      <td className="px-8 py-6 text-right">
+                        <button className="px-5 py-2.5 bg-ink text-white rounded-xl font-bold text-[10px] uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-ink/10">
+                          Examine Profile
+                        </button>
+                      </td>
+                    </motion.tr>
+                  ))
+                )}
               </AnimatePresence>
             </tbody>
           </table>
@@ -292,26 +327,32 @@ export function AdminDashboard() {
                          <Link to="/admin/tutors" className="text-primary font-bold text-sm tracking-widest uppercase bg-primary/5 px-4 py-2 rounded-lg hover:bg-primary/10 transition-colors">Manage All</Link>
                       </div>
                       <div className="divide-y divide-gray-50">
-                         {pendingApprovals.slice(0, 3).map((tutor, i) => (
-                           <div key={i} className="py-6 flex items-center justify-between group">
-                              <div className="flex items-center gap-4">
-                                 <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-500 font-bold font-mono">
-                                    {tutor.name[0]}
-                                 </div>
-                                 <div>
-                                    <p className="font-bold text-lg">{tutor.name}</p>
-                                    <p className="text-gray-400 text-xs uppercase tracking-widest">{tutor.subject} • {tutor.city}</p>
-                                 </div>
-                              </div>
-                              <div className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${
-                                tutor.status === "Verified" ? "bg-green-50 text-green-600 border-green-100" :
-                                tutor.status === "Declined" ? "bg-red-50 text-red-600 border-red-100" : 
-                                "bg-amber-50 text-amber-600 border-amber-100"
-                              }`}>
-                                 {tutor.status}
-                              </div>
-                           </div>
-                         ))}
+                         {loading ? (
+                           <div className="text-center py-8 text-gray-500">Loading...</div>
+                         ) : tutors.length === 0 ? (
+                           <div className="text-center py-8 text-gray-500">No tutors yet</div>
+                         ) : (
+                           tutors.slice(0, 3).map((tutor, i) => (
+                             <div key={i} className="py-6 flex items-center justify-between group">
+                                <div className="flex items-center gap-4">
+                                   <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-500 font-bold font-mono">
+                                      {tutor.displayName?.[0] || 'T'}
+                                   </div>
+                                   <div>
+                                      <p className="font-bold text-lg">{tutor.displayName || 'Tutor'}</p>
+                                      <p className="text-gray-400 text-xs uppercase tracking-widest">{tutor.subject || 'Various'} • {tutor.city || 'Location'}</p>
+                                   </div>
+                                </div>
+                                <div className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${
+                                  tutor.isApproved ? "bg-green-50 text-green-600 border-green-100" :
+                                  tutor.isDeclined ? "bg-red-50 text-red-600 border-red-100" : 
+                                  "bg-amber-50 text-amber-600 border-amber-100"
+                                }`}>
+                                   {tutor.isApproved ? "Verified" : tutor.isDeclined ? "Declined" : "Pending Review"}
+                                </div>
+                             </div>
+                           ))
+                         )}
                       </div>
                    </div>
 

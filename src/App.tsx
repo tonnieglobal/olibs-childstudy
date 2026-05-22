@@ -10,6 +10,29 @@ import { AdminDashboard } from "./pages/AdminDashboard";
 import { TutorOnboarding } from "./pages/TutorOnboarding";
 import { Navbar } from "./components/layout/Navbar";
 import { Footer } from "./components/layout/Footer";
+import { useFirebase } from "./contexts/FirebaseContext";
+
+function ProtectedRoute({ children, allowedRole }: { children: any; allowedRole?: string }) {
+  const { user, profile, loading } = useFirebase();
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRole && profile?.role !== allowedRole) {
+    // Redirect to appropriate dashboard based on role
+    if (profile?.role === "parent") return <Navigate to="/parent" replace />;
+    if (profile?.role === "tutor") return <Navigate to="/tutor" replace />;
+    if (profile?.role === "admin") return <Navigate to="/admin" replace />;
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+}
 
 function AppContent() {
   const location = useLocation();
@@ -28,10 +51,26 @@ function AppContent() {
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/login" element={<AuthPage />} />
           <Route path="/signup" element={<AuthPage isSignup />} />
-          <Route path="/parent/*" element={<ParentDashboard />} />
-          <Route path="/tutor/onboarding" element={<TutorOnboarding />} />
-          <Route path="/tutor/*" element={<TutorDashboard />} />
-          <Route path="/admin/*" element={<AdminDashboard />} />
+          <Route path="/parent/*" element={
+            <ProtectedRoute allowedRole="parent">
+              <ParentDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/tutor/onboarding" element={
+            <ProtectedRoute allowedRole="tutor">
+              <TutorOnboarding />
+            </ProtectedRoute>
+          } />
+          <Route path="/tutor/*" element={
+            <ProtectedRoute allowedRole="tutor">
+              <TutorDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/*" element={
+            <ProtectedRoute allowedRole="admin">
+              <AdminDashboard />
+            </ProtectedRoute>
+          } />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
